@@ -1,6 +1,6 @@
-import { authorizeRequest } from './authorizeRequest';
-import { fetchFromOriginAndStore } from './fetchFromOriginAndStore';
 import { fetchFromR2 } from './fetchFromR2';
+import { fetchFromOrigin } from './fetchFromOrigin';
+import { storeToR2 } from './storeToR2';
 import type { Context } from 'hono';
 
 export interface Env {
@@ -8,15 +8,17 @@ export interface Env {
 	ORIGIN_APT_SERVER: string;
 }
 
-// 関数: GETリクエストを処理する
-export const handleGetRequest = async (context: Context<{ Bindings: Env }>): Promise<Response> => {
+type Params = {
+	context: Context<{ Bindings: Env }>;
+	isCacheableToR2: boolean,
+}
+
+export const handleGetRequest = async ({ context, isCacheableToR2 }: Params): Promise<Response> => {
 	const { req, env } = context;
 	const url = new URL(req.url);
-	const objectKey = url.pathname;
-	const bucket = env.APT_MIRROR_BUCKET;
 
-	if (!authorizeRequest({ method: req.method })) {
-		return new Response('Unauthorized', { status: 401 });
+	if (url.search) {
+		return new Response('Forbidden', { status: 403 });
 	}
 
 	const cache = caches.default
@@ -28,25 +30,39 @@ export const handleGetRequest = async (context: Context<{ Bindings: Env }>): Pro
 		return response
 	}
 
-	const r2Response = await fetchFromR2({
-		bucket: bucket,
-		key: objectKey
-	});
+	const objectKey = url.pathname;
+	const bucket = env.APT_MIRROR_BUCKET;
 
-	if (r2Response) {
-		console.log(`Read from R2 for: ${req.url}.`);
-		await cache.put(cacheKey, r2Response.clone())
-		return r2Response;
+	if (isCacheableToR2) {
+		const r2Response = await fetchFromR2({
+			bucket: bucket,
+			key: objectKey
+		});
+
+		if (r2Response) {
+			console.log(`Read from R2 for: ${req.url}.`);
+			await cache.put(cacheKey, r2Response.clone())
+			return r2Response;
+		}
 	}
 
-	const originResponse = await fetchFromOriginAndStore({
-		bucket: bucket,
-		key: objectKey,
-		url: new URL(`http://${env.ORIGIN_APT_SERVER}${objectKey}`)
-	});
+	const originRequestUrl = new URL(`http://${env.ORIGIN_APT_SERVER}${url.pathname}`)
+	const originResponse = await fetchFromOrigin(originRequestUrl)
 
 	if (!originResponse.ok) {
-		return new Response('Internal Server Error', { status: 500 });
+		return new Response('Forbidden', { status: 403 });
+	}
+
+	if (isCacheableToR2) {
+		const res = await storeToR2({
+			bucket: bucket,
+			key: objectKey,
+			origin_response: originResponse,
+		})
+
+		if(!res.ok){
+			return new Response('Internal Server Error', { status: 500 });
+		}
 	}
 
 	console.log(`Read from Origin for: ${req.url}.`);
