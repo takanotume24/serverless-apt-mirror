@@ -12,7 +12,7 @@ type Params = {
 	context: Context<{ Bindings: Env }>;
 	isCacheableToR2: boolean,
 }
-// 関数: GETリクエストを処理する
+
 export const handleGetRequest = async ({ context, isCacheableToR2 }: Params): Promise<Response> => {
 	const { req, env } = context;
 	const url = new URL(req.url);
