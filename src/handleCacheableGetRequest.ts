@@ -1,4 +1,3 @@
-import { authorizeRequest } from './authorizeRequest';
 import { fetchFromOriginAndStore } from './fetchFromOriginAndStore';
 import { fetchFromR2 } from './fetchFromR2';
 import type { Context } from 'hono';
@@ -9,14 +8,12 @@ export interface Env {
 }
 
 // 関数: GETリクエストを処理する
-export const handleGetRequest = async (context: Context<{ Bindings: Env }>): Promise<Response> => {
+export const handleCacheableGetRequest = async (context: Context<{ Bindings: Env }>): Promise<Response> => {
 	const { req, env } = context;
 	const url = new URL(req.url);
-	const objectKey = url.pathname;
-	const bucket = env.APT_MIRROR_BUCKET;
 
-	if (!authorizeRequest({ method: req.method })) {
-		return new Response('Unauthorized', { status: 401 });
+	if (url.search) {
+		return new Response('Forbidden', { status: 403 });
 	}
 
 	const cache = caches.default
@@ -27,6 +24,9 @@ export const handleGetRequest = async (context: Context<{ Bindings: Env }>): Pro
 		console.log(`Cache hit for: ${req.url}.`);
 		return response
 	}
+
+	const objectKey = url.pathname;
+	const bucket = env.APT_MIRROR_BUCKET;
 
 	const r2Response = await fetchFromR2({
 		bucket: bucket,
@@ -46,7 +46,8 @@ export const handleGetRequest = async (context: Context<{ Bindings: Env }>): Pro
 	});
 
 	if (!originResponse.ok) {
-		return new Response('Internal Server Error', { status: 500 });
+		console.log(originResponse.url)
+		return new Response('Forbidden', { status: 403 });
 	}
 
 	console.log(`Read from Origin for: ${req.url}.`);

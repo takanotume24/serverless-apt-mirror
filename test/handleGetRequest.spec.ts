@@ -41,8 +41,8 @@ describe('handleGetRequest', () => {
     const context = createMockContext('http://example.com/', 'GET', {} as R2Bucket);
     const response = await handleGetRequest(context);
 
-    expect(response.status).toBe(401);
-    expect(response.statusText).toBe('Unauthorized');
+    expect(response.status).toBe(403);
+    expect(response.statusText).toBe('Forbidden');
   });
 
   it('should fetch from origin and store if object not in R2', async () => {
