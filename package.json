@@ -16,9 +16,9 @@
 		"typescript": "^5.7.3",
 		"vitest": "3.0.4",
 		"wrangler": "^3.105.1",
-		"hono": "^4.6.16"
+		"hono": "^4.7.1"
 	},
 	"dependencies": {
-		"hono": "^4.6.16"
+		"hono": "^4.7.1"
 	}
 }
